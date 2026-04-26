@@ -1,4 +1,4 @@
-name: Build NorthstarLauncher
+name: Build NorthstarLauncher (CMake)
 
 on:
   push:
@@ -15,35 +15,28 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+      - name: Install CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.27'
 
-      - name: Setup Visual Studio environment
+      - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
 
-      # DEBUG STEP (shows actual project structure once)
-      - name: Show repo contents
+      - name: Configure CMake
         shell: pwsh
         run: |
-          Get-ChildItem -Recurse | Select-Object FullName
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 
-      # BUILD STEP (safe fallback)
-      - name: Build project (auto-detect)
+      - name: Build
         shell: pwsh
         run: |
-          $proj = Get-ChildItem -Recurse -Include *.vcxproj,*.sln | Select-Object -First 1
-
-          if (-not $proj) {
-            Write-Error "No buildable project found (.vcxproj or .sln missing)"
-            exit 1
-          }
-
-          msbuild $proj.FullName /p:Configuration=Release /p:Platform=x64 /m
+          cmake --build build --config Release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: NorthstarLauncher
           path: |
-            **\Release\*
-            **\bin\Release\*
+            build/Release/*
+            build/**/Release/*
