@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -18,7 +18,7 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Setup Visual Studio environment
+      - name: Setup Visual Studio build environment
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Find solution file
@@ -32,10 +32,10 @@ jobs:
           }
           echo "solution=$($sln.FullName)" >> $env:GITHUB_OUTPUT
 
-      - name: Build solution
-        run: msbuild "${{ steps.find_sln.outputs.solution }}" /p:Configuration=Release /m
+      - name: Build solution (Win32 fix)
+        run: msbuild "${{ steps.find_sln.outputs.solution }}" /p:Configuration=Release /p:Platform=Win32 /m
 
-      - name: Upload artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: northstar-build
