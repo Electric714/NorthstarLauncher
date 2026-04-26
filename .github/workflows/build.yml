@@ -1,4 +1,4 @@
-name: Build Northstar
+name: Build NorthstarLauncher
 
 on:
   push:
@@ -21,35 +21,29 @@ jobs:
       - name: Setup Visual Studio environment
         uses: ilammy/msvc-dev-cmd@v1
 
-      # Find ONLY top-level solution (ignore thirdparty entirely)
-      - name: Find Northstar solution
-        id: find_sln
+      # DEBUG STEP (shows actual project structure once)
+      - name: Show repo contents
         shell: pwsh
         run: |
-          $sln = Get-ChildItem -Recurse -Filter *.sln |
-            Where-Object { $_.FullName -notmatch "thirdparty|libcurl|VC10" } |
-            Select-Object -First 1
+          Get-ChildItem -Recurse | Select-Object FullName
 
-          if (-not $sln) {
-            Write-Error "No valid Northstar solution found"
+      # BUILD STEP (safe fallback)
+      - name: Build project (auto-detect)
+        shell: pwsh
+        run: |
+          $proj = Get-ChildItem -Recurse -Include *.vcxproj,*.sln | Select-Object -First 1
+
+          if (-not $proj) {
+            Write-Error "No buildable project found (.vcxproj or .sln missing)"
             exit 1
           }
 
-          echo "solution=$($sln.FullName)" >> $env:GITHUB_OUTPUT
+          msbuild $proj.FullName /p:Configuration=Release /p:Platform=x64 /m
 
-      # CRITICAL FIX: do NOT build project references (this is what drags in curl)
-      - name: Build ONLY Northstar (no dependency traversal)
-        run: msbuild "${{ steps.find_sln.outputs.solution }}" `
-          /p:Configuration=Release `
-          /p:Platform=Win32 `
-          /m `
-          /p:BuildProjectReferences=false `
-          /p:ResolveReferences=false
-
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: northstar-build
+          name: NorthstarLauncher
           path: |
-            **\bin\Release\*
             **\Release\*
+            **\bin\Release\*
