@@ -1,4 +1,4 @@
-name: Build NorthstarLauncher (CMake)
+name: Build NorthstarLauncher (Auto Detect)
 
 on:
   push:
@@ -15,28 +15,80 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install CMake
-        uses: jwlawson/actions-setup-cmake@v2
-        with:
-          cmake-version: '3.27'
-
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
 
+      # -----------------------------
+      # STEP 1: Detect build system
+      # -----------------------------
+      - name: Detect build system
+        id: detect
+        shell: pwsh
+        run: |
+          if (Test-Path "CMakeLists.txt") {
+            echo "type=cmake" >> $env:GITHUB_OUTPUT
+            Write-Host "Detected: CMake"
+          }
+          elseif (Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1) {
+            echo "type=msbuild" >> $env:GITHUB_OUTPUT
+            Write-Host "Detected: MSBuild (.sln)"
+          }
+          elseif (Get-ChildItem -Recurse -Filter *.vcxproj | Select-Object -First 1) {
+            echo "type=msbuild" >> $env:GITHUB_OUTPUT
+            Write-Host "Detected: MSBuild (.vcxproj)"
+          }
+          else {
+            Write-Error "No supported build system found"
+            exit 1
+          }
+
+      # -----------------------------
+      # STEP 2A: CMake build path
+      # -----------------------------
       - name: Configure CMake
+        if: steps.detect.outputs.type == 'cmake'
         shell: pwsh
         run: |
           cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 
-      - name: Build
+      - name: Build (CMake)
+        if: steps.detect.outputs.type == 'cmake'
         shell: pwsh
         run: |
           cmake --build build --config Release
 
-      - name: Upload artifact
+      # -----------------------------
+      # STEP 2B: MSBuild path
+      # -----------------------------
+      - name: Find MSBuild project
+        if: steps.detect.outputs.type == 'msbuild'
+        id: find_msbuild
+        shell: pwsh
+        run: |
+          $proj = Get-ChildItem -Recurse -Include *.sln,*.vcxproj | Select-Object -First 1
+          if (-not $proj) {
+            Write-Error "No MSBuild project found"
+            exit 1
+          }
+          echo "project=$($proj.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Build (MSBuild)
+        if: steps.detect.outputs.type == 'msbuild'
+        shell: pwsh
+        run: |
+          msbuild "${{ steps.find_msbuild.outputs.project }}" `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /m
+
+      # -----------------------------
+      # STEP 3: Upload artifacts
+      # -----------------------------
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: NorthstarLauncher
           path: |
-            build/Release/*
-            build/**/Release/*
+            build/**/*
+            **\bin\Release\*
+            **\Release\*
