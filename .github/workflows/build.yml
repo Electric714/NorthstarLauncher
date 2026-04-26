@@ -18,24 +18,32 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Setup Visual Studio build environment
+      - name: Setup Visual Studio environment
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Find solution file
+      - name: Find top-level solution (NOT nested ones)
         id: find_sln
         shell: pwsh
         run: |
-          $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
+          $sln = Get-ChildItem -Recurse -Filter *.sln |
+            Where-Object { $_.FullName -notmatch "thirdparty" } |
+            Select-Object -First 1
+
           if (-not $sln) {
-            Write-Error "No .sln file found in repo"
+            Write-Error "No valid top-level solution found"
             exit 1
           }
+
           echo "solution=$($sln.FullName)" >> $env:GITHUB_OUTPUT
 
-      - name: Build solution (Win32 fix)
-        run: msbuild "${{ steps.find_sln.outputs.solution }}" /p:Configuration=Release /p:Platform=Win32 /m
+      - name: Build solution (ignore nested VC10 projects)
+        run: msbuild "${{ steps.find_sln.outputs.solution }}" `
+          /p:Configuration=Release `
+          /p:Platform=Win32 `
+          /m `
+          /p:BuildProjectReferences=false
 
-      - name: Upload build artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: northstar-build
