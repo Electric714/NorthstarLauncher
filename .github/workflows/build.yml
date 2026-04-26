@@ -1,0 +1,39 @@
+name: Build Northstar
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    env:
+      BUILD_CONFIGURATION: Release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup Visual Studio environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Restore NuGet packages (if any)
+        run: nuget restore
+
+      - name: Build solution
+        run: msbuild Northstar.sln /p:Configuration=%BUILD_CONFIGURATION% /m
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: northstar-build
+          path: |
+            **\bin\Release\*
+            **\x64\Release\*
