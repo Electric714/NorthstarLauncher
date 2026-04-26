@@ -10,20 +10,35 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - uses: microsoft/setup-msbuild@v2
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Setup Visual Studio environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Find solution file
+        id: find_sln
+        shell: pwsh
+        run: |
+          $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
+          if (-not $sln) {
+            Write-Error "No .sln file found in repo"
+            exit 1
+          }
+          echo "solution=$($sln.FullName)" >> $env:GITHUB_OUTPUT
 
       - name: Build solution
-        run: msbuild Northstar.sln /p:Configuration=Release /m
+        run: msbuild "${{ steps.find_sln.outputs.solution }}" /p:Configuration=Release /m
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build
+          name: northstar-build
           path: |
+            **\bin\Release\*
             **\Release\*
