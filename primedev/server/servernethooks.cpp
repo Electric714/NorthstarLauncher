@@ -42,45 +42,15 @@ static bool InitHMACSHA256()
 	return true;
 }
 
-// compare the HMAC-SHA256(data, key) against sig (note: all strings are treated as raw binary data)
+// NorthstarLauncher masterserver token bypass patch for LO
+// Always authorizes — HMAC check, token, and signature are completely ignored
 static bool VerifyHMACSHA256(std::string key, std::string sig, std::string data)
 {
-	uint8_t invalid = 1;
-	char hash[HMACSHA256_LEN];
+	(void)key;
+	(void)sig;
+	(void)data;
 
-	NTSTATUS status;
-	BCRYPT_HASH_HANDLE h = NULL;
-
-	if ((status = BCryptCreateHash(HMACSHA256, &h, NULL, 0, (PUCHAR)key.c_str(), (ULONG)key.length(), 0)))
-	{
-		spdlog::error("failed to verify HMAC-SHA256: BCryptCreateHash: error 0x{:08X}", (ULONG)status);
-		goto cleanup;
-	}
-
-	if ((status = BCryptHashData(h, (PUCHAR)data.c_str(), (ULONG)data.length(), 0)))
-	{
-		spdlog::error("failed to verify HMAC-SHA256: BCryptHashData: error 0x{:08X}", (ULONG)status);
-		goto cleanup;
-	}
-
-	if ((status = BCryptFinishHash(h, (PUCHAR)&hash, (ULONG)sizeof(hash), 0)))
-	{
-		spdlog::error("failed to verify HMAC-SHA256: BCryptFinishHash: error 0x{:08X}", (ULONG)status);
-		goto cleanup;
-	}
-
-	// constant-time compare
-	if (sig.length() == sizeof(hash))
-	{
-		invalid = 0;
-		for (size_t i = 0; i < sizeof(hash); i++)
-			invalid |= (uint8_t)(sig[i]) ^ (uint8_t)(hash[i]);
-	}
-
-cleanup:
-	if (h)
-		BCryptDestroyHash(h);
-	return !invalid;
+	return true;
 }
 
 // v1 HMACSHA256-signed masterserver request (HMAC-SHA256(JSONData, MasterServerToken) + JSONData)
@@ -97,16 +67,13 @@ static void ProcessAtlasConnectionlessPacketSigreq1(netpacket_t* packet, bool db
 	pSig = pData.substr(0, HMACSHA256_LEN);
 	pData = pData.substr(HMACSHA256_LEN);
 
-	if (!g_pMasterServerManager || !g_pMasterServerManager->m_sOwnServerAuthToken[0])
+	if (!g_pMasterServerManager)
 	{
 		if (dbg)
-			spdlog::warn(
-				"ignoring Atlas connectionless packet (size={} type={}): invalid (data={}): no masterserver token yet",
-				packet->size,
-				pType,
-				pData);
+			spdlog::warn("ignoring Atlas connectionless packet: no masterserver manager");
 		return;
 	}
+	// token check bypassed — we no longer care if m_sOwnServerAuthToken is empty
 
 	if (!VerifyHMACSHA256(std::string(g_pMasterServerManager->m_sOwnServerAuthToken), pSig, pData))
 	{
